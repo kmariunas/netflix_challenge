@@ -16,19 +16,137 @@ To know more about the expectations, please refer to the guidelines.
 ##
 #####
 
-#Where data is located
+# Where data is located
 movies_file = './data/movies.csv'
 users_file = './data/users.csv'
 ratings_file = './data/ratings.csv'
 predictions_file = './data/predictions.csv'
 submission_file = './data/submission.csv'
 
-
 # Read the data using pandas
-movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID':'int', 'year':'int', 'movie':'str'}, names=['movieID', 'year', 'movie'])
-users_description = pd.read_csv(users_file, delimiter=';', dtype={'userID':'int', 'gender':'str', 'age':'int', 'profession':'int'}, names=['userID', 'gender', 'age', 'profession'])
-ratings_description = pd.read_csv(ratings_file, delimiter=';', dtype={'userID':'int', 'movieID':'int', 'rating':'int'}, names=['userID', 'movieID', 'rating'])
+movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
+                                 names=['movieID', 'year', 'movie'])
+users_description = pd.read_csv(users_file, delimiter=';',
+                                dtype={'userID': 'int', 'gender': 'str', 'age': 'int', 'profession': 'int'},
+                                names=['userID', 'gender', 'age', 'profession'])
+ratings_description = pd.read_csv(ratings_file, delimiter=';',
+                                  dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
+                                  names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
+
+
+# How to create np matrix from pd dataframe
+# print(ratings_description.to_numpy())
+
+
+###
+# UTILS:
+###
+mean_rating = 0
+
+def set_mean_rating(utility_matrix):
+    count = 0
+    rating_sum = 0
+    for row in utility_matrix:
+        for rating in row:
+            if rating != 0:
+                count += 1
+                rating_sum += rating
+    if count != 0:
+        mean_rating = rating_sum / count
+
+
+def user_rating_deviation(utility_matrix, user_index):
+    user_rating_avg = 0
+    count = 0
+    ratings_sum = 0
+    # iterate over user ratings
+    for row in utility_matrix:
+        if row[user_index] != 0:
+            count += 1
+            ratings_sum += 1
+    if count != 0:
+        user_rating_avg = ratings_sum / count
+    return user_rating_avg - mean_rating
+
+
+def movie_rating_deviation(utility_matrix, movie_index):
+    movie_rating_avg = 0
+    count = 0
+    ratings_sum = 0
+    for rating in utility_matrix[movie_index]:
+        if rating != 0:
+            count += 1
+            ratings_sum += rating
+    if count != 0:
+        movie_rating_avg = ratings_sum / count
+    return mean_rating - movie_rating_avg
+
+
+# Returns utility matrix with users.size columns and movies.size rows.
+# Values that are not present in the predictions array are set to zero.
+# Params users, movies and movie_rating are numpy arrays.
+# Row and column with index 0 should be ignored.
+def create_utility_matrix(users, movies, movie_rating):
+    utility_matrix = np.zeros((len(movies) + 1, len(users) + 1))
+    for row in movie_rating:
+        utility_matrix[row[1], row[0]] = row[2]
+    return utility_matrix
+
+
+def normalize_matrix(utility_matrix):
+    normalized_matrix = np.copy(utility_matrix)
+    for row in normalized_matrix:
+        count = 0
+        ratings_sum = 0
+        for i in range(0, len(row)):
+            if row[i] != 0:
+                count += 1
+                ratings_sum += row[i]
+        if count != 0:
+            row_mean = ratings_sum / count
+            for i in range(0, len(row)):
+                if row[i] != 0:
+                    row[i] = row[i] - row_mean
+    return normalized_matrix
+
+
+# Calculates cosine similarity between two movies.
+def calculate_similarity(row1, row2):
+    # cos α = A dot B / (|A| * |B|)
+    return np.dot(row1, row2) / (np.linalg.norm(row1) * np.linalg.norm(row2))
+
+
+# Returns array
+def calculate_movies_similarity(utility_matrix):
+    # len(utility_matrix) = number of movies
+    similarities = np.empty((len(utility_matrix), len(utility_matrix)))
+    for i in range(1, len(utility_matrix)-2):
+        for j in range(i+1, len(utility_matrix)):
+            sim = calculate_similarity(utility_matrix[i], utility_matrix[j])
+            similarities[i, j] = sim
+            similarities[j, i] = sim
+    return similarities
+
+
+# # TESTING SIMILARITY:
+# row1 = np.array([4, 0, 0, 5, 1, 0, 0])
+# row2 = np.array([5, 5, 4, 0, 0, 0, 0])
+# similarity = calculate_similarity(row1, row2)
+# print(similarity)
+
+# TESTING:
+utility_matrix = create_utility_matrix(users_description.to_numpy(),
+                                       movies_description.to_numpy(),
+                                       ratings_description.to_numpy())
+print(utility_matrix)
+normalized_matrix = normalize_matrix(utility_matrix)
+print("Normalized matrix:")
+print(normalized_matrix)
+movies_similarities = calculate_movies_similarity(normalized_matrix)
+print("Similarities:")
+# I think the length of some rows is close to zero and division causes an error.
+print(movies_similarities)
 
 #####
 ##
@@ -47,13 +165,13 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 ## LATENT FACTORS
 ##
 #####
-    
+
 def predict_latent_factors(movies, users, ratings, predictions):
     ## TO COMPLETE
 
     pass
-    
-    
+
+
 #####
 ##
 ## FINAL PREDICTORS
@@ -61,9 +179,9 @@ def predict_latent_factors(movies, users, ratings, predictions):
 #####
 
 def predict_final(movies, users, ratings, predictions):
-  ## TO COMPLETE
+    ## TO COMPLETE
 
-  pass
+    pass
 
 
 #####
@@ -72,12 +190,13 @@ def predict_final(movies, users, ratings, predictions):
 ## //!!\\ TO CHANGE
 ##
 #####
-    
-#By default, predicted rate is a random classifier
+
+# By default, predicted rate is a random classifier
 def predict_random(movies, users, ratings, predictions):
     number_predictions = len(predictions)
 
     return [[idx, randint(1, 5)] for idx in range(1, number_predictions + 1)]
+
 
 #####
 ##
@@ -88,12 +207,12 @@ def predict_random(movies, users, ratings, predictions):
 ## //!!\\ TO CHANGE by your prediction function
 predictions = predict_random(movies_description, users_description, ratings_description, predictions_description)
 
-#Save predictions, should be in the form 'list of tuples' or 'list of lists'
+# Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
-    #Formates data
+    # Formates data
     predictions = [map(str, row) for row in predictions]
     predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n'+'\n'.join(predictions)
-    
-    #Writes it dowmn
+    predictions = 'Id,Rating\n' + '\n'.join(predictions)
+
+    # Writes it dowmn
     submission_writer.write(predictions)
