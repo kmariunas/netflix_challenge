@@ -192,8 +192,8 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         sim_sum = 0
         for item in similar_ind:
             if item is not 0:
-                rating_sim += movie_similarities[row[1], item] * utility_matrix[item, row[0]]
-                sim_sum += movie_similarities[row[1], item]
+                rating_sim += movie_similarities[row[1], int(item)] * utility_matrix[int(item), row[0]]
+                sim_sum += movie_similarities[row[1], int(item)]
         predictions_matrix[i, 1] = rating_sim / sim_sum
         i += 1
     return predictions_matrix
