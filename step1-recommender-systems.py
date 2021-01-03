@@ -186,7 +186,7 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 
     for row in predictions_np:
         similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
-        predictions_matrix[i, 0] = i + 1
+        predictions_matrix[i, 0] = int(i + 1)
 
         rating_sim = 0
         sim_sum = 0
