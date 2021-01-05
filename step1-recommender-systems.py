@@ -137,7 +137,6 @@ def calculate_movies_similarity(utility_matrix):
 def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
     row = similarity_matrix[i]
     ind = np.argsort(-1 * row)[:len(row)]
-    print(ind)
     most_similar = np.empty((n, ))
     i = 0
     for index in ind:
@@ -146,7 +145,6 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
         if normalized_matrix[index, user] != 0:
             most_similar[i] = index
             i += 1
-    print(most_similar)
     return most_similar
 
 # # TESTING SIMILARITY:
@@ -156,9 +154,9 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
 # print(similarity)
 
 # TESTING:
-utility_matrix = create_utility_matrix(users_description.to_numpy(),
-                                       movies_description.to_numpy(),
-                                       ratings_description.to_numpy())
+# utility_matrix = create_utility_matrix(users_description.to_numpy(),
+#                                        movies_description.to_numpy(),
+#                                        ratings_description.to_numpy())
 # print(utility_matrix)
 # normalized_matrix = normalize_matrix(utility_matrix)
 # print("Normalized matrix:")
@@ -177,16 +175,19 @@ utility_matrix = create_utility_matrix(users_description.to_numpy(),
 def predict_collaborative_filtering(movies, users, ratings, predictions):
     # TO COMPLETE
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    print("CREATED UTILITY MATRIX")
     normalized_matrix = normalize_matrix(utility_matrix)
+    print("NORMALIZED MATRIX")
     movie_similarities = calculate_movies_similarity(normalized_matrix)
+    print("CREATED MOVIES SIMILARITIES")
 
-    predictions_matrix = np.empty((len(predictions), 2))
+    predictions_matrix = np.empty(len(predictions))
     predictions_np = predictions.to_numpy()
     i = 0
 
     for row in predictions_np:
         similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
-        predictions_matrix[i, 0] = int(i + 1)
+        #predictions_matrix[i, 0] = int(i + 1)
 
         rating_sim = 0
         sim_sum = 0
@@ -194,9 +195,10 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
             if item is not 0:
                 rating_sim += movie_similarities[row[1], int(item)] * utility_matrix[int(item), row[0]]
                 sim_sum += movie_similarities[row[1], int(item)]
-        predictions_matrix[i, 1] = rating_sim / sim_sum
+        predictions_matrix[i] = rating_sim / sim_sum
         i += 1
-    return predictions_matrix
+    #return predictions_matrix
+    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
 #####
