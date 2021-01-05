@@ -52,12 +52,7 @@ def create_utility_matrix(users, movies, movie_rating):
 ###
 # UTILS:
 ###
-utility_matrix = create_utility_matrix(users_description.to_numpy(),
-                                       movies_description.to_numpy(),
-                                       ratings_description.to_numpy())
-
-
-def set_mean_rating(utility_matrix):
+def calculate_mean_rating(utility_matrix):
     count = 0
     rating_sum = 0
     for row in utility_matrix:
@@ -69,12 +64,7 @@ def set_mean_rating(utility_matrix):
         return rating_sum / count
 
 
-mean_rating = set_mean_rating(utility_matrix)
-
-
-
-
-def user_rating_deviation(utility_matrix, user_index):
+def user_rating_deviation(utility_matrix, user_index, mean_rating):
     user_rating_avg = 0
     count = 0
     ratings_sum = 0
@@ -90,7 +80,7 @@ def user_rating_deviation(utility_matrix, user_index):
     return user_rating_avg - mean_rating
 
 
-def movie_rating_deviation(utility_matrix, movie_index):
+def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
     movie_rating_avg = 0
     count = 0
     ratings_sum = 0
@@ -103,13 +93,12 @@ def movie_rating_deviation(utility_matrix, movie_index):
     return mean_rating - movie_rating_avg
 
 
-def calculate_global_baseline(utility_matrix, user_index, movie_index):
-    user_deviation = user_rating_deviation(utility_matrix, user_index)
+def calculate_global_baseline(utility_matrix, user_index, movie_index, mean_rating):
+    user_deviation = user_rating_deviation(utility_matrix, user_index, mean_rating)
     # print("User Deviation", user_deviation)
-    movie_deviation = movie_rating_deviation(utility_matrix, movie_index)
+    movie_deviation = movie_rating_deviation(utility_matrix, movie_index, mean_rating)
     # print("Movie deviation", movie_deviation)
     return mean_rating + user_deviation + movie_deviation
-
 
 
 def normalize_matrix(utility_matrix):
@@ -150,6 +139,7 @@ def calculate_movies_similarity(utility_matrix):
             similarities[i, j] = sim
             similarities[j, i] = sim
     return similarities
+
 
 # find most similar movies of the user similar to movie i
 def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
@@ -199,7 +189,7 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
     # TODO: refactor naming
-    # utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
     print("CREATED UTILITY MATRIX")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
@@ -229,9 +219,9 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 
 # Combines Global Baseline with Item-Item collaborative Filtering
 def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
-    # utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
-    # print("CREATED UTILITY MATRIX")
-    # set_mean_rating(utility_matrix)
+    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    print("CREATED UTILITY MATRIX")
+    mean_rating = calculate_mean_rating(utility_matrix)
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
@@ -243,7 +233,7 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     i = 0
 
     for row in predictions_np:
-        baseline_estimate = calculate_global_baseline(utility_matrix, predictions_np[0], predictions_np[1])
+        baseline_estimate = calculate_global_baseline(utility_matrix, predictions_np[0], predictions_np[1], mean_rating)
         similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
         #predictions_matrix[i, 0] = int(i + 1)
 
@@ -251,12 +241,14 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
         sim_sum = 0
         for item in similar_ind:
             if item is not 0:
-                rating_sim += movie_similarities[row[1], int(item)] * (utility_matrix[int(item), row[0]] - baseline_estimate)
+                rating_sim += movie_similarities[row[1], int(item)] \
+                              * (utility_matrix[int(item), row[0]] - baseline_estimate)
                 sim_sum += movie_similarities[row[1], int(item)]
         predictions_matrix[i] = rating_sim / sim_sum
         i += 1
     #return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
+
 
 #####
 ##
