@@ -66,39 +66,46 @@ def calculate_mean_rating(utility_matrix):
 
 
 def user_rating_deviation(utility_matrix, user_index, mean_rating):
-    user_rating_avg = 0
     count = 0
     ratings_sum = 0
     # iterate over user ratings
     user_column = utility_matrix[:, user_index]
     # print(user_column)
-    for i in range(1, len(user_column)):
-        if utility_matrix[i, user_index] is not 0:
+    for rating in user_column:
+        if rating != 0:
             count += 1
-            ratings_sum += utility_matrix[i, user_index]
-    if count != 0:
-        user_rating_avg = ratings_sum / count
+            ratings_sum += rating
+    if count == 0:
+        return 0
+    user_rating_avg = ratings_sum / count
     return user_rating_avg - mean_rating
 
 
 def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
-    movie_rating_avg = 0
     count = 0
     ratings_sum = 0
     for rating in utility_matrix[movie_index]:
         if rating != 0:
             count += 1
             ratings_sum += rating
-    if count != 0:
-        movie_rating_avg = ratings_sum / count
-    return mean_rating - movie_rating_avg
+    if count == 0:
+        return 0
+    movie_rating_avg = ratings_sum / count
+    # print(movie_rating_avg)
+    return movie_rating_avg - mean_rating
 
 
-def calculate_global_baseline(utility_matrix, user_index, movie_index, mean_rating):
+def movie_rating_deviation_matrix(utility_matrix, mean_rating):
+    deviation_matrix = np.empty(len(utility_matrix))
+    for index in range(1, len(utility_matrix)):
+        deviation_matrix[index] = movie_rating_deviation(utility_matrix, index, mean_rating)
+
+    return deviation_matrix
+
+
+def calculate_global_baseline(utility_matrix, user_index, movie_deviation, mean_rating):
     user_deviation = user_rating_deviation(utility_matrix, user_index, mean_rating)
     # print("User Deviation", user_deviation)
-    movie_deviation = movie_rating_deviation(utility_matrix, movie_index, mean_rating)
-    # print("Movie deviation", movie_deviation)
     return mean_rating + user_deviation + movie_deviation
 
 
@@ -156,17 +163,30 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
             i += 1
     return most_similar
 
+
+
+# TESTING SUM SHIT
+# matrix = np.array([[0, 0, 0, 0, 0],
+#                   [0, 3, 0, 5, 4],
+#                   [0, 4, 1, 5, 3],
+#                   [0, 0, 5, 0, 2]])
+# mean_rating = calculate_mean_rating(matrix)
+# print("MEAN RATING", mean_rating)
+# movie_deviation = movie_rating_deviation_matrix(matrix, mean_rating)
+# for i in range(1, 5):
+#     estimate = calculate_global_baseline(matrix, i, movie_deviation[3], mean_rating)
+#     print("BASELINE ESTIMATE: ", estimate)
 # # TESTING SIMILARITY:
 # row1 = np.array([4, 0, 0, 5, 1, 0, 0])
 # row2 = np.array([5, 5, 4, 0, 0, 0, 0])
 # similarity = calculate_similarity(row1, row2)
 # print(similarity)
 
-# TESTING:
+# # TESTING:
 # utility_matrix = create_utility_matrix(users_description.to_numpy(),
 #                                        movies_description.to_numpy(),
 #                                        ratings_description.to_numpy())
-# set_mean_rating(utility_matrix)
+# mean_rating = calculate_mean_rating(utility_matrix)
 # print("MEAN RATING: ", mean_rating)
 # for idx in range(1, 10):
 #     baseline_estimate = calculate_global_baseline(utility_matrix, idx, idx)
@@ -217,7 +237,6 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
-
 # Combines Global Baseline with Item-Item collaborative Filtering
 def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
@@ -228,13 +247,17 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("NORMALIZED MATRIX")
     movie_similarities = calculate_movies_similarity(normalized_matrix)
     print("CREATED MOVIES SIMILARITIES")
+    movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
+    print("CREATED MOVIES DEVIATION MATRIX")
 
     predictions_matrix = np.empty(len(predictions))
     predictions_np = predictions.to_numpy()
     i = 0
 
     for row in predictions_np:
-        baseline_estimate = calculate_global_baseline(utility_matrix, row[0], row[1], mean_rating)
+        print(i)
+        user_deviation = mean_rating + user_rating_deviation(utility_matrix, row[0], mean_rating)
+        movie_deviation = movie_deviation_matrix[row[1]]
         similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
         #predictions_matrix[i, 0] = int(i + 1)
 
@@ -242,15 +265,40 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
         sim_sum = 0
         for item in similar_ind:
             if item is not 0:
-                rating_sim += movie_similarities[row[1], int(item)] \
-                              * (utility_matrix[int(item), row[0]] - baseline_estimate)
+                item_baseline_estimate = user_deviation + movie_deviation_matrix[int(item)]
+                rating_sim += movie_similarities[row[1], int(item)] * (utility_matrix[int(item), row[0]] - item_baseline_estimate)
                 sim_sum += movie_similarities[row[1], int(item)]
-        predictions_matrix[i] = rating_sim / sim_sum
+        predictions_matrix[i] = user_deviation + movie_deviation + rating_sim / sim_sum
         i += 1
     #return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
+def predict_global_average_for_all(movies, users, ratings, predictions):
+    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    print("CREATED UTILITY MATRIX")
+    mean_rating = calculate_mean_rating(utility_matrix)
+    print("CALCULATED MEAN RATING")
+    return [[idx, mean_rating] for idx in range(1, len(predictions) + 1)]
+
+
+def predict_baseline_estimate(movies, users, ratings, predictions):
+    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    print("CREATED UTILITY MATRIX")
+    mean_rating = calculate_mean_rating(utility_matrix)
+    print("CALCULATED MEAN RATING")
+    movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
+    print("CREATED MOVIES DEVIATION MATRIX")
+
+    predictions_matrix = np.empty(len(predictions))
+    predictions_np = predictions.to_numpy()
+    i = 0
+    for row in predictions_np:
+        print(i)
+        predictions_matrix[i] = calculate_global_baseline(utility_matrix, row[0], movie_deviation_matrix[row[1]], mean_rating)
+        i += 1
+
+    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 #####
 ##
 ## LATENT FACTORS
