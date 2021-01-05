@@ -50,9 +50,68 @@ def create_utility_matrix(users, movies, movie_rating):
     return utility_matrix
 
 
+# normalizes matrix by subtracting row mean
+def normalize_matrix(utility_matrix):
+    normalized_matrix = np.copy(utility_matrix)
+    for row in normalized_matrix:
+        count = 0
+        ratings_sum = 0
+        for i in range(1, len(row)):                    # ignore column 0
+            if row[i] != 0:
+                count += 1
+                ratings_sum += row[i]
+        if count != 0:                                  # if movies doesnt have any ratings, there is nothing to normalize
+            row_mean = ratings_sum / count
+            for i in range(1, len(row)):
+                if row[i] != 0:
+                    row[i] = row[i] - row_mean          # subtract row mean from rating
+    return normalized_matrix
+
+
+# Calculates cosine similarity between two movies.
+def movies_similarity(row1, row2):
+    norm = np.linalg.norm(row1) * np.linalg.norm(row2)
+    if norm == 0:                                       # one of the movies does not have any ratings
+        return -1                                       # assume the movies are not similar at all
+    return np.dot(row1, row2) / norm                    # cos α = A dot B / (|A| * |B|)
+
+
+# Returns square matrix of similarities between every two movies
+def movies_similarity_matrix(utility_matrix):
+    number_of_movies = len(utility_matrix)
+    similarities = np.full((number_of_movies, number_of_movies), -1)
+    for i in range(1, len(utility_matrix)-1):           # ignore column 0
+        for j in range(i+1, len(utility_matrix)):
+            sim = movies_similarity(utility_matrix[i], utility_matrix[j])
+            if sim > 1 or sim < -1:
+                print("MOVIES SIMILARITY ERROR: SIMILARITY NOT WITHIN BOUNDS")
+            similarities[i, j] = sim
+            similarities[j, i] = sim
+    return similarities
+
+
+# find n most similar movies of the user similar to movie i
+def get_n_similar(normalized_matrix, similarity_matrix, user_index, movie_index, n):
+    row = similarity_matrix[movie_index]
+    indexes = np.argsort(-1 * row)[:len(row)]           # vector of movies indexes sorted by greatest similarity first
+    most_similar = np.empty((n, ))                      # TODO: not sure if its wise to use np.empty
+    i = 0
+    for index in indexes:
+        if i == n - 1:                                  # only select n movies
+            break
+        if normalized_matrix[index, user_index] != 0:   # user has rated movie
+            most_similar[i] = index
+            i += 1
+    return most_similar
+
+
 ###
-# UTILS:
+#
+# GLOBAL BASELINE UTILS
+#
 ###
+
+# Returns the average of all ratings.
 def calculate_mean_rating(utility_matrix):
     count = 0
     rating_sum = 0
@@ -63,14 +122,16 @@ def calculate_mean_rating(utility_matrix):
                 rating_sum += rating
     if count != 0:
         return rating_sum / count
+    else:
+        print("MEAN RATING ERROR: NO RATINGS PRESENT IN MATRIX")
 
 
+# Returns bias of user's ratings.
 def user_rating_deviation(utility_matrix, user_index, mean_rating):
     count = 0
     ratings_sum = 0
-    # iterate over user ratings
-    user_column = utility_matrix[:, user_index]
-    # print(user_column)
+
+    user_column = utility_matrix[:, user_index]         # iterate over user's ratings
     for rating in user_column:
         if rating != 0:
             count += 1
@@ -78,9 +139,10 @@ def user_rating_deviation(utility_matrix, user_index, mean_rating):
     if count == 0:
         return 0
     user_rating_avg = ratings_sum / count
-    return user_rating_avg - mean_rating
+    return user_rating_avg - mean_rating                # bias = user avg - global avg
 
 
+# Returns bias of movie's ratings.
 def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
     count = 0
     ratings_sum = 0
@@ -91,116 +153,22 @@ def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
     if count == 0:
         return 0
     movie_rating_avg = ratings_sum / count
-    # print(movie_rating_avg)
     return movie_rating_avg - mean_rating
 
 
+# Returns array of rating deviations for all movies.
 def movie_rating_deviation_matrix(utility_matrix, mean_rating):
-    deviation_matrix = np.empty(len(utility_matrix))
+    deviation_matrix = np.empty(len(utility_matrix))    # array of length = number of movies
     for index in range(1, len(utility_matrix)):
         deviation_matrix[index] = movie_rating_deviation(utility_matrix, index, mean_rating)
-
     return deviation_matrix
 
 
-def calculate_global_baseline(utility_matrix, user_index, movie_deviation, mean_rating):
+# Returns baseline estimate of user rating for movie, based on mean rating and biases.
+def calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
     user_deviation = user_rating_deviation(utility_matrix, user_index, mean_rating)
-    # print("User Deviation", user_deviation)
-    return mean_rating + user_deviation + movie_deviation
+    return mean_rating + user_deviation + movie_bias    # Rxi = mean + Bx + Bi
 
-
-def normalize_matrix(utility_matrix):
-    normalized_matrix = np.copy(utility_matrix)
-    for row in normalized_matrix:
-        count = 0
-        ratings_sum = 0
-        for i in range(0, len(row)):
-            if row[i] != 0:
-                count += 1
-                ratings_sum += row[i]
-        if count != 0:
-            row_mean = ratings_sum / count
-            for i in range(0, len(row)):
-                if row[i] != 0:
-                    row[i] = row[i] - row_mean
-    return normalized_matrix
-
-
-# Calculates cosine similarity between two movies.
-def calculate_similarity(row1, row2):
-    # cos α = A dot B / (|A| * |B|)
-    norm = np.linalg.norm(row1) * np.linalg.norm(row2)
-    if norm == 0:
-        return -1
-    return np.dot(row1, row2) / norm
-
-
-# Returns array
-def calculate_movies_similarity(utility_matrix):
-    # len(utility_matrix) = number of movies
-    similarities = np.empty((len(utility_matrix), len(utility_matrix)))
-    for i in range(1, len(utility_matrix)-1):
-        for j in range(i+1, len(utility_matrix)):
-            sim = calculate_similarity(utility_matrix[i], utility_matrix[j])
-            if sim > 1 or sim < -1:
-                print("deep shit or dipshit")
-            similarities[i, j] = sim
-            similarities[j, i] = sim
-    return similarities
-
-
-# find most similar movies of the user similar to movie i
-def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
-    row = similarity_matrix[i]
-    ind = np.argsort(-1 * row)[:len(row)]
-    most_similar = np.empty((n, ))
-    i = 0
-    for index in ind:
-        if i == n - 1:
-            break
-        if normalized_matrix[index, user] != 0:
-            most_similar[i] = index
-            i += 1
-    return most_similar
-
-
-
-# TESTING SUM SHIT
-# matrix = np.array([[0, 0, 0, 0, 0],
-#                   [0, 3, 0, 5, 4],
-#                   [0, 4, 1, 5, 3],
-#                   [0, 0, 5, 0, 2]])
-# mean_rating = calculate_mean_rating(matrix)
-# print("MEAN RATING", mean_rating)
-# movie_deviation = movie_rating_deviation_matrix(matrix, mean_rating)
-# for i in range(1, 5):
-#     estimate = calculate_global_baseline(matrix, i, movie_deviation[3], mean_rating)
-#     print("BASELINE ESTIMATE: ", estimate)
-# # TESTING SIMILARITY:
-# row1 = np.array([4, 0, 0, 5, 1, 0, 0])
-# row2 = np.array([5, 5, 4, 0, 0, 0, 0])
-# similarity = calculate_similarity(row1, row2)
-# print(similarity)
-
-# # TESTING:
-# utility_matrix = create_utility_matrix(users_description.to_numpy(),
-#                                        movies_description.to_numpy(),
-#                                        ratings_description.to_numpy())
-# mean_rating = calculate_mean_rating(utility_matrix)
-# print("MEAN RATING: ", mean_rating)
-# for idx in range(1, 10):
-#     baseline_estimate = calculate_global_baseline(utility_matrix, idx, idx)
-#     print("Baseline Estimate", baseline_estimate)
-
-
-# print(utility_matrix)
-# normalized_matrix = normalize_matrix(utility_matrix)
-# print("Normalized matrix:")
-# print(normalized_matrix)
-# movies_similarities = calculate_movies_similarity(normalized_matrix)
-# print("Similarities:")
-# # I think the length of some rows is close to zero and division causes an error.
-# print(movies_similarities)
 
 #####
 ##
@@ -209,31 +177,31 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
-    # TODO: refactor naming
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
     print("CREATED UTILITY MATRIX")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    movie_similarities = calculate_movies_similarity(normalized_matrix)
+    movies_similarities = movies_similarity_matrix(normalized_matrix)
     print("CREATED MOVIES SIMILARITIES")
 
     predictions_matrix = np.empty(len(predictions))
     predictions_np = predictions.to_numpy()
+
+    n = 10
     i = 0
+    for row in predictions_np:                          # matrix has user index on 1st column, movie index on 2nd
+        user_index = row[0]
+        movie_index = row[1]
+        similar_ind = get_n_similar(normalized_matrix, movies_similarities, user_index, movie_index, n)
 
-    for row in predictions_np:
-        similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
-        #predictions_matrix[i, 0] = int(i + 1)
-
-        rating_sim = 0
-        sim_sum = 0
+        similarity_rating_sum = 0
+        similarity_sum = 0
         for item in similar_ind:
             if item is not 0:
-                rating_sim += movie_similarities[row[1], int(item)] * utility_matrix[int(item), row[0]]
-                sim_sum += movie_similarities[row[1], int(item)]
-        predictions_matrix[i] = rating_sim / sim_sum
+                similarity_rating_sum += movies_similarities[movie_index, item] * utility_matrix[int(item), user_index]
+                similarity_sum += movies_similarities[movie_index, int(item)]
+        predictions_matrix[i] = similarity_rating_sum / similarity_sum
         i += 1
-    #return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
@@ -245,7 +213,7 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    movie_similarities = calculate_movies_similarity(normalized_matrix)
+    movie_similarities = movies_similarity_matrix(normalized_matrix)
     print("CREATED MOVIES SIMILARITIES")
     movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
     print("CREATED MOVIES DEVIATION MATRIX")
@@ -273,6 +241,12 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     #return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
+
+#####
+##
+## Global Baseline Estimate
+##
+#####
 
 def predict_global_average_for_all(movies, users, ratings, predictions):
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
