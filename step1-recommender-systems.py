@@ -39,10 +39,23 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 # print(ratings_description.to_numpy())
 
 
+# Returns utility matrix with users.size columns and movies.size rows.
+# Values that are not present in the predictions array are set to zero.
+# Params users, movies and movie_rating are numpy arrays.
+# Row and column with index 0 should be ignored.
+def create_utility_matrix(users, movies, movie_rating):
+    utility_matrix = np.zeros((len(movies) + 1, len(users) + 1))
+    for row in movie_rating:
+        utility_matrix[row[1], row[0]] = row[2]
+    return utility_matrix
+
 ###
 # UTILS:
 ###
-mean_rating = 0
+utility_matrix = create_utility_matrix(users_description.to_numpy(),
+                                       movies_description.to_numpy(),
+                                       ratings_description.to_numpy())
+
 
 def set_mean_rating(utility_matrix):
     count = 0
@@ -53,7 +66,12 @@ def set_mean_rating(utility_matrix):
                 count += 1
                 rating_sum += rating
     if count != 0:
-        mean_rating = rating_sum / count
+        return rating_sum / count
+
+
+mean_rating = set_mean_rating(utility_matrix)
+
+
 
 
 def user_rating_deviation(utility_matrix, user_index):
@@ -61,10 +79,12 @@ def user_rating_deviation(utility_matrix, user_index):
     count = 0
     ratings_sum = 0
     # iterate over user ratings
-    for row in utility_matrix:
-        if row[user_index] != 0:
+    user_column = utility_matrix[:, user_index]
+    # print(user_column)
+    for i in range(0, len(user_column)):
+        if utility_matrix[i, user_index] != 0:
             count += 1
-            ratings_sum += 1
+            ratings_sum += utility_matrix[i, user_index]
     if count != 0:
         user_rating_avg = ratings_sum / count
     return user_rating_avg - mean_rating
@@ -83,15 +103,13 @@ def movie_rating_deviation(utility_matrix, movie_index):
     return mean_rating - movie_rating_avg
 
 
-# Returns utility matrix with users.size columns and movies.size rows.
-# Values that are not present in the predictions array are set to zero.
-# Params users, movies and movie_rating are numpy arrays.
-# Row and column with index 0 should be ignored.
-def create_utility_matrix(users, movies, movie_rating):
-    utility_matrix = np.zeros((len(movies) + 1, len(users) + 1))
-    for row in movie_rating:
-        utility_matrix[row[1], row[0]] = row[2]
-    return utility_matrix
+def calculate_global_baseline(utility_matrix, user_index, movie_index):
+    user_deviation = user_rating_deviation(utility_matrix, user_index)
+    # print("User Deviation", user_deviation)
+    movie_deviation = movie_rating_deviation(utility_matrix, movie_index)
+    # print("Movie deviation", movie_deviation)
+    return mean_rating + user_deviation + movie_deviation
+
 
 
 def normalize_matrix(utility_matrix):
@@ -157,6 +175,13 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
 # utility_matrix = create_utility_matrix(users_description.to_numpy(),
 #                                        movies_description.to_numpy(),
 #                                        ratings_description.to_numpy())
+# set_mean_rating(utility_matrix)
+# print("MEAN RATING: ", mean_rating)
+# for idx in range(1, 10):
+#     baseline_estimate = calculate_global_baseline(utility_matrix, idx, idx)
+#     print("Baseline Estimate", baseline_estimate)
+
+
 # print(utility_matrix)
 # normalized_matrix = normalize_matrix(utility_matrix)
 # print("Normalized matrix:")
@@ -173,8 +198,8 @@ def get_n_similar(normalized_matrix, user, similarity_matrix, n, i):
 #####
 
 def predict_collaborative_filtering(movies, users, ratings, predictions):
-    # TO COMPLETE
-    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    # TODO: refactor naming
+    # utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
     print("CREATED UTILITY MATRIX")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
@@ -200,6 +225,38 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     #return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
+
+
+# Combines Global Baseline with Item-Item collaborative Filtering
+def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
+    # utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    # print("CREATED UTILITY MATRIX")
+    # set_mean_rating(utility_matrix)
+    print("CALCULATED MEAN RATING")
+    normalized_matrix = normalize_matrix(utility_matrix)
+    print("NORMALIZED MATRIX")
+    movie_similarities = calculate_movies_similarity(normalized_matrix)
+    print("CREATED MOVIES SIMILARITIES")
+
+    predictions_matrix = np.empty(len(predictions))
+    predictions_np = predictions.to_numpy()
+    i = 0
+
+    for row in predictions_np:
+        baseline_estimate = calculate_global_baseline(utility_matrix, predictions_np[0], predictions_np[1])
+        similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
+        #predictions_matrix[i, 0] = int(i + 1)
+
+        rating_sim = 0
+        sim_sum = 0
+        for item in similar_ind:
+            if item is not 0:
+                rating_sim += movie_similarities[row[1], int(item)] * (utility_matrix[int(item), row[0]] - baseline_estimate)
+                sim_sum += movie_similarities[row[1], int(item)]
+        predictions_matrix[i] = rating_sim / sim_sum
+        i += 1
+    #return predictions_matrix
+    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 #####
 ##
@@ -246,7 +303,7 @@ def predict_random(movies, users, ratings, predictions):
 #####    
 
 ## //!!\\ TO CHANGE by your prediction function
-predictions = predict_collaborative_filtering(movies_description, users_description, ratings_description, predictions_description)
+predictions = predict_collaborative_filtering_V2(movies_description, users_description, ratings_description, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
