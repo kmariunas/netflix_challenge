@@ -49,6 +49,7 @@ def create_utility_matrix(users, movies, movie_rating):
         utility_matrix[row[1], row[0]] = row[2]
     return utility_matrix
 
+
 ###
 # UTILS:
 ###
@@ -71,8 +72,8 @@ def user_rating_deviation(utility_matrix, user_index, mean_rating):
     # iterate over user ratings
     user_column = utility_matrix[:, user_index]
     # print(user_column)
-    for i in range(0, len(user_column)):
-        if utility_matrix[i, user_index] != 0:
+    for i in range(1, len(user_column)):
+        if utility_matrix[i, user_index] is not 0:
             count += 1
             ratings_sum += utility_matrix[i, user_index]
     if count != 0:
@@ -233,7 +234,7 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     i = 0
 
     for row in predictions_np:
-        baseline_estimate = calculate_global_baseline(utility_matrix, predictions_np[0], predictions_np[1], mean_rating)
+        baseline_estimate = calculate_global_baseline(utility_matrix, row[0], row[1], mean_rating)
         similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
         #predictions_matrix[i, 0] = int(i + 1)
 
