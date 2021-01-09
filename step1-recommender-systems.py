@@ -43,7 +43,7 @@ predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['u
 # Values that are not present in the predictions array are set to zero.
 # Params users, movies and movie_rating are numpy arrays.
 # Row and column with index 0 should be ignored.
-def create_utility_matrix(users, movies, movie_rating):
+def create_utility_matrix  (users, movies, movie_rating):
     utility_matrix = np.zeros((len(movies) + 1, len(users) + 1))
     for row in movie_rating:
         utility_matrix[row[1], row[0]] = row[2]
@@ -279,11 +279,50 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
 ##
 #####
 
-def predict_latent_factors(movies, users, ratings, predictions):
-    ## TO COMPLETE
+def calculate_gradient(matrix, step_size):
+    gradient_matrix = np.zeros(matrix.shape)
 
-    pass
+    for row in range(0, len(matrix)):
+        for value in range(0, len(matrix[row])):
+            gradient_matrix[row][value] =
 
+
+def predict_latent_factors(movies, users, ratings, predictions, k = 100):
+    # R = Q * P
+    # P and Q are mapped to k - dimensional rows
+    # prediction for user x on movie i Rxi = Qi * PX
+    # have P and Q such that it minimizes:
+    # sum Of All Entrires not missing (rxi - qi * px) ^2
+    # + lambda [sumx(length(px)^2) + sumi(length(qi)^2)]
+    # lambda is a regularization parameter
+    #
+    # gradient descent: initialize P and Q (using SVD, missing ratings are 0)
+    #                   Do gradient descent:
+    #                   P <- P - n * derivative(P)
+    #                   Q <- Q - n * derivative(Q)
+    #                   n - learning rate
+    # derivative(Q) = [derivative(qik)] and
+    # derivative(qik) = sumxi(-2(rxi - qi*px)*pxk) + 2 * lambda * qik
+
+    #movies on colums, users are rows
+    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    print("CALCULATING SVD")
+
+    #might have to give it a transpose of utility
+    U, S, VT = np.linalg.svd(utility_matrix)
+    print(utility_matrix.shape, ' ', U.shape, ' ', S.shape, ' ', VT.shape, ' -- FINISHED')
+
+    sigma = np.diag(S)
+    #might not need to transpose
+    V = VT.T
+
+    print("APPROXIMATING TO P AND Q")
+    Q = U[:, :k]
+    P = sigma * VT
+    P = Q[:, :k]
+
+
+predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
 
 #####
 ##
@@ -292,7 +331,7 @@ def predict_latent_factors(movies, users, ratings, predictions):
 #####
 
 def predict_final(movies, users, ratings, predictions):
-    ## TO COMPLETE
+
 
     pass
 
@@ -318,14 +357,14 @@ def predict_random(movies, users, ratings, predictions):
 #####    
 
 ## //!!\\ TO CHANGE by your prediction function
-predictions = predict_collaborative_filtering_V2(movies_description, users_description, ratings_description, predictions_description)
+#predictions = predict_collaborative_filtering_V2(movies_description, users_description, ratings_description, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
-with open(submission_file, 'w') as submission_writer:
-    # Formates data
-    predictions = [map(str, row) for row in predictions]
-    predictions = [','.join(row) for row in predictions]
-    predictions = 'Id,Rating\n' + '\n'.join(predictions)
-
-    # Writes it dowmn
-    submission_writer.write(predictions)
+# with open(submission_file, 'w') as submission_writer:
+#     # Formates data
+#     predictions = [map(str, row) for row in predictions]
+#     predictions = [','.join(row) for row in predictions]
+#     predictions = 'Id,Rating\n' + '\n'.join(predictions)
+#
+#     # Writes it dowmn
+#     submission_writer.write(predictions)
