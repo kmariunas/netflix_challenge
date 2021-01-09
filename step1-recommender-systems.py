@@ -36,7 +36,8 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
 
-movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
+
+# movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
 
 
 def write_matrix_to_file(matrix):
@@ -51,7 +52,7 @@ def write_matrix_to_file(matrix):
 # Values that are not present in the predictions array are set to zero.
 # Params users, movies and movie_rating are numpy arrays.
 # Row and column with index 0 should be ignored.
-def create_utility_matrix  (users, movies, movie_rating):
+def create_utility_matrix(users, movies, movie_rating):
     utility_matrix = np.zeros((len(movies) + 1, len(users) + 1))
     for row in movie_rating:
         utility_matrix[row[1], row[0]] = row[2]
@@ -64,24 +65,24 @@ def normalize_matrix(utility_matrix):
     for row in normalized_matrix:
         count = 0
         ratings_sum = 0
-        for i in range(1, len(row)):                    # ignore column 0
+        for i in range(1, len(row)):  # ignore column 0
             if row[i] != 0:
                 count += 1
                 ratings_sum += row[i]
-        if count != 0:                                  # if movies doesnt have any ratings, there is nothing to normalize
+        if count != 0:  # if movies doesnt have any ratings, there is nothing to normalize
             row_mean = ratings_sum / count
             for i in range(1, len(row)):
                 if row[i] != 0:
-                    row[i] = row[i] - row_mean          # subtract row mean from rating
+                    row[i] = row[i] - row_mean  # subtract row mean from rating
     return normalized_matrix
 
 
 # Calculates cosine similarity between two movies.
 def movies_similarity(row1, row2):
     norm = np.linalg.norm(row1) * np.linalg.norm(row2)
-    if norm == 0:                                       # one of the movies does not have any ratings
-        return -1                                       # assume the movies are not similar at all
-    return np.dot(row1, row2) / norm                    # cos α = A dot B / (|A| * |B|)
+    if norm == 0:  # one of the movies does not have any ratings
+        return -1  # assume the movies are not similar at all
+    return np.dot(row1, row2) / norm  # cos α = A dot B / (|A| * |B|)
 
 
 # Returns square matrix of similarities between every two movies
@@ -89,8 +90,8 @@ def movies_similarity_matrix(utility_matrix):
     number_of_movies = len(utility_matrix)
     similarities = np.empty((number_of_movies, number_of_movies))
     # similarities = np.full((number_of_movies, number_of_movies), -1)
-    for i in range(1, number_of_movies-1):           # ignore column 0
-        for j in range(i+1, number_of_movies):
+    for i in range(1, number_of_movies - 1):  # ignore column 0
+        for j in range(i + 1, number_of_movies):
             sim = movies_similarity(utility_matrix[i], utility_matrix[j])
             if sim > 1 or sim < -1:
                 print("MOVIES SIMILARITY ERROR: SIMILARITY NOT WITHIN BOUNDS")
@@ -102,13 +103,13 @@ def movies_similarity_matrix(utility_matrix):
 # find n most similar movies of the user similar to movie i
 def get_n_similar(normalized_matrix, similarity_matrix, user_index, movie_index, n):
     row = similarity_matrix[movie_index]
-    indexes = np.argsort(-1 * row)[:len(row)]           # vector of movies indexes sorted by greatest similarity first
-    most_similar = np.empty((n, ))                      # TODO: not sure if its wise to use np.empty
+    indexes = np.argsort(-1 * row)[:len(row)]  # vector of movies indexes sorted by greatest similarity first
+    most_similar = np.empty((n,))  # TODO: not sure if its wise to use np.empty
     i = 0
     for index in indexes:
-        if i == n - 1:                                  # only select n movies
+        if i == n - 1:  # only select n movies
             break
-        if normalized_matrix[index, user_index] != 0:   # user has rated movie
+        if normalized_matrix[index, user_index] != 0:  # user has rated movie
             most_similar[i] = index
             i += 1
     return most_similar
@@ -140,7 +141,7 @@ def user_rating_deviation(utility_matrix, user_index, mean_rating):
     count = 0
     ratings_sum = 0
 
-    user_column = utility_matrix[:, user_index]         # iterate over user's ratings
+    user_column = utility_matrix[:, user_index]  # iterate over user's ratings
     for rating in user_column:
         if rating != 0:
             count += 1
@@ -148,7 +149,7 @@ def user_rating_deviation(utility_matrix, user_index, mean_rating):
     if count == 0:
         return 0
     user_rating_avg = ratings_sum / count
-    return user_rating_avg - mean_rating                # bias = user avg - global avg
+    return user_rating_avg - mean_rating  # bias = user avg - global avg
 
 
 # Returns bias of movie's ratings.
@@ -167,7 +168,7 @@ def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
 
 # Returns array of rating deviations for all movies.
 def movie_rating_deviation_matrix(utility_matrix, mean_rating):
-    deviation_matrix = np.empty(len(utility_matrix))    # array of length = number of movies
+    deviation_matrix = np.empty(len(utility_matrix))  # array of length = number of movies
     deviation_matrix[0] = 0
     for index in range(1, len(utility_matrix)):
         deviation_matrix[index] = movie_rating_deviation(utility_matrix, index, mean_rating)
@@ -177,7 +178,7 @@ def movie_rating_deviation_matrix(utility_matrix, mean_rating):
 # Returns baseline estimate of user rating for movie, based on mean rating and biases.
 def calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
     user_deviation = user_rating_deviation(utility_matrix, user_index, mean_rating)
-    return mean_rating + user_deviation + movie_bias    # Rxi = mean + Bx + Bi
+    return mean_rating + user_deviation + movie_bias  # Rxi = mean + Bx + Bi
 
 
 #####
@@ -199,7 +200,7 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
 
     n = 10
     i = 0
-    for row in predictions_np:                          # matrix has user index on 1st column, movie index on 2nd
+    for row in predictions_np:  # matrix has user index on 1st column, movie index on 2nd
         user_index = row[0]
         movie_index = row[1]
         similar_ind = get_n_similar(normalized_matrix, movies_similarities, user_index, movie_index, n)
@@ -208,11 +209,12 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         similarity_sum = 0
         for item in similar_ind:
             if item is not 0:
-                similarity_rating_sum += movies_similarities[movie_index, int(item)] * utility_matrix[int(item), user_index]
+                similarity_rating_sum += movies_similarities[movie_index, int(item)] * utility_matrix[
+                    int(item), user_index]
                 similarity_sum += movies_similarities[movie_index, int(item)]
         predictions_matrix[i] = similarity_rating_sum / similarity_sum
         i += 1
-    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
+    return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
 
 # TODO: READ ME
@@ -226,9 +228,9 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    # movie_similarities = movies_similarity_matrix(normalized_matrix)
+    movie_similarities = movies_similarity_matrix(normalized_matrix)
     # print("CREATED MOVIES SIMILARITIES")
-    # write_matrix_to_file(movie_similarities)
+    write_matrix_to_file(movie_similarities)
     movie_similarities = movie_similarities_matrix_description.to_numpy()
     print("MOVIES SIMILARITIES READ FROM FILE")
     movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
@@ -253,12 +255,13 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
         for item in similar_ind:
             if item is not 0:
                 item_baseline_estimate = user_deviation + movie_deviation_matrix[int(item)]
-                rating_sim += movie_similarities[movie_index, int(item)] * (utility_matrix[int(item), user_index] - item_baseline_estimate)
+                rating_sim += movie_similarities[movie_index, int(item)] * (
+                        utility_matrix[int(item), user_index] - item_baseline_estimate)
                 sim_sum += movie_similarities[movie_index, int(item)]
         predictions_matrix[i] = min(user_deviation + movie_deviation + rating_sim / sim_sum, 5.0)
         i += 1
     # return predictions_matrix
-    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
+    return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
 
 #####
@@ -288,25 +291,28 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
     i = 0
     for row in predictions_np:
         print(i)
-        predictions_matrix[i] = calculate_global_baseline(utility_matrix, row[0], movie_deviation_matrix[row[1]], mean_rating)
+        predictions_matrix[i] = calculate_global_baseline(utility_matrix, row[0], movie_deviation_matrix[row[1]],
+                                                          mean_rating)
         i += 1
 
-    return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
+    return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
+
+
 #####
 ##
 ## LATENT FACTORS
 ##
 #####
 
-def calculate_gradient(matrix, step_size):
-    gradient_matrix = np.zeros(matrix.shape)
+# def calculate_gradient(matrix, step_size):
+#     gradient_matrix = np.zeros(matrix.shape)
+#
+#     for row in range(0, len(matrix)):
+#         for value in range(0, len(matrix[row])):
+#             gradient_matrix[row][value] =
 
-    for row in range(0, len(matrix)):
-        for value in range(0, len(matrix[row])):
-            gradient_matrix[row][value] =
 
-
-def predict_latent_factors(movies, users, ratings, predictions, k = 100):
+def predict_latent_factors(movies, users, ratings, predictions, k=100):
     # R = Q * P
     # P and Q are mapped to k - dimensional rows
     # prediction for user x on movie i Rxi = Qi * PX
@@ -323,25 +329,40 @@ def predict_latent_factors(movies, users, ratings, predictions, k = 100):
     # derivative(Q) = [derivative(qik)] and
     # derivative(qik) = sumxi(-2(rxi - qi*px)*pxk) + 2 * lambda * qik
 
-    #movies on colums, users are rows
+    # movies on colums, users are rows
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    utility_matrix = utility_matrix[1:, 1:]
+    print(utility_matrix.shape, " -- Utility matrix")
     print("CALCULATING SVD")
 
-    #might have to give it a transpose of utility
+    # might have to give it a transpose of utility
     U, S, VT = np.linalg.svd(utility_matrix)
-    print(utility_matrix.shape, ' ', U.shape, ' ', S.shape, ' ', VT.shape, ' -- FINISHED')
+    print(U.shape, ' ', S.shape, ' ', VT.shape, ' -- FINISHED')
 
     sigma = np.diag(S)
-    #might not need to transpose
+
+    # might not need to transpose
     V = VT.T
 
     print("APPROXIMATING TO P AND Q")
-    Q = U[:, :k]
-    P = sigma * VT
-    P = Q[:, :k]
+    Q = V[:, :k]  # users
+    P = sigma * U
+    P = P[:, :k]  # movies
+    print(Q.shape, " - Q shape, ", P.shape, " - P shape")
 
+    predictions_np = predictions.to_numpy()
+    predict = np.empty(len(predictions))
+    i = 0
 
-predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
+    print(np.sum(P[1914] * Q[1635]))
+    for row in predictions_np:
+        user_index = row[0]
+        movie_index = row[1]
+        predict[i] = np.sum(P[movie_index - 1] * Q[user_index - 1])
+        i += 1
+
+    return [[idx, predict[idx - 1]] for idx in range(1, len(predictions) + 1)]
+
 
 #####
 ##
@@ -350,8 +371,6 @@ predict_latent_factors(movies_description, users_description, ratings_descriptio
 #####
 
 def predict_final(movies, users, ratings, predictions):
-
-
     pass
 
 
@@ -376,14 +395,15 @@ def predict_random(movies, users, ratings, predictions):
 #####    
 
 ## //!!\\ TO CHANGE by your prediction function
-#predictions = predict_collaborative_filtering_V2(movies_description, users_description, ratings_description, predictions_description)
+predictions = predict_latent_factors(movies_description, users_description, ratings_description,
+                                     predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
-# with open(submission_file, 'w') as submission_writer:
-#     # Formates data
-#     predictions = [map(str, row) for row in predictions]
-#     predictions = [','.join(row) for row in predictions]
-#     predictions = 'Id,Rating\n' + '\n'.join(predictions)
-#
-#     # Writes it dowmn
-#     submission_writer.write(predictions)
+with open(submission_file, 'w') as submission_writer:
+    # Formates data
+    predictions = [map(str, row) for row in predictions]
+    predictions = [','.join(row) for row in predictions]
+    predictions = 'Id,Rating\n' + '\n'.join(predictions)
+
+    # Writes it dowmn
+    submission_writer.write(predictions)
