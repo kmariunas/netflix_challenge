@@ -23,6 +23,8 @@ ratings_file = './data/ratings.csv'
 predictions_file = './data/predictions.csv'
 submission_file = './data/submission.csv'
 
+movie_similarities_matrix_file = './data/movie_similarities_matrix.csv'
+
 # Read the data using pandas
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
                                  names=['movieID', 'year', 'movie'])
@@ -33,6 +35,12 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
+
+movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
+
+
+def write_matrix_to_file(matrix):
+    np.savetxt(movie_similarities_matrix_file, matrix, delimiter=';')
 
 
 # How to create np matrix from pd dataframe
@@ -79,9 +87,10 @@ def movies_similarity(row1, row2):
 # Returns square matrix of similarities between every two movies
 def movies_similarity_matrix(utility_matrix):
     number_of_movies = len(utility_matrix)
-    similarities = np.full((number_of_movies, number_of_movies), -1)
-    for i in range(1, len(utility_matrix)-1):           # ignore column 0
-        for j in range(i+1, len(utility_matrix)):
+    similarities = np.empty((number_of_movies, number_of_movies))
+    # similarities = np.full((number_of_movies, number_of_movies), -1)
+    for i in range(1, number_of_movies-1):           # ignore column 0
+        for j in range(i+1, number_of_movies):
             sim = movies_similarity(utility_matrix[i], utility_matrix[j])
             if sim > 1 or sim < -1:
                 print("MOVIES SIMILARITY ERROR: SIMILARITY NOT WITHIN BOUNDS")
@@ -159,6 +168,7 @@ def movie_rating_deviation(utility_matrix, movie_index, mean_rating):
 # Returns array of rating deviations for all movies.
 def movie_rating_deviation_matrix(utility_matrix, mean_rating):
     deviation_matrix = np.empty(len(utility_matrix))    # array of length = number of movies
+    deviation_matrix[0] = 0
     for index in range(1, len(utility_matrix)):
         deviation_matrix[index] = movie_rating_deviation(utility_matrix, index, mean_rating)
     return deviation_matrix
@@ -198,13 +208,16 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
         similarity_sum = 0
         for item in similar_ind:
             if item is not 0:
-                similarity_rating_sum += movies_similarities[movie_index, item] * utility_matrix[int(item), user_index]
+                similarity_rating_sum += movies_similarities[movie_index, int(item)] * utility_matrix[int(item), user_index]
                 similarity_sum += movies_similarities[movie_index, int(item)]
         predictions_matrix[i] = similarity_rating_sum / similarity_sum
         i += 1
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
+# TODO: READ ME
+# first uncomment lines 227-229 when running the method. The movies similarities matrix will be written to file.
+# On following runs, comment the lines again and read the matrix from local storage for great SPEED improvement.
 # Combines Global Baseline with Item-Item collaborative Filtering
 def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
@@ -213,32 +226,38 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    movie_similarities = movies_similarity_matrix(normalized_matrix)
-    print("CREATED MOVIES SIMILARITIES")
+    # movie_similarities = movies_similarity_matrix(normalized_matrix)
+    # print("CREATED MOVIES SIMILARITIES")
+    # write_matrix_to_file(movie_similarities)
+    movie_similarities = movie_similarities_matrix_description.to_numpy()
+    print("MOVIES SIMILARITIES READ FROM FILE")
     movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
     print("CREATED MOVIES DEVIATION MATRIX")
 
     predictions_matrix = np.empty(len(predictions))
     predictions_np = predictions.to_numpy()
+    n = 10
     i = 0
 
     for row in predictions_np:
         print(i)
-        user_deviation = mean_rating + user_rating_deviation(utility_matrix, row[0], mean_rating)
+        user_index = row[0]
+        movie_index = row[1]
+        user_deviation = mean_rating + user_rating_deviation(utility_matrix, user_index, mean_rating)
         movie_deviation = movie_deviation_matrix[row[1]]
-        similar_ind = get_n_similar(normalized_matrix, row[0], movie_similarities, 10, row[1])
-        #predictions_matrix[i, 0] = int(i + 1)
+        similar_ind = get_n_similar(normalized_matrix, movie_similarities, user_index, movie_index, n)
+        # predictions_matrix[i, 0] = int(i + 1)
 
         rating_sim = 0
         sim_sum = 0
         for item in similar_ind:
             if item is not 0:
                 item_baseline_estimate = user_deviation + movie_deviation_matrix[int(item)]
-                rating_sim += movie_similarities[row[1], int(item)] * (utility_matrix[int(item), row[0]] - item_baseline_estimate)
-                sim_sum += movie_similarities[row[1], int(item)]
-        predictions_matrix[i] = user_deviation + movie_deviation + rating_sim / sim_sum
+                rating_sim += movie_similarities[movie_index, int(item)] * (utility_matrix[int(item), user_index] - item_baseline_estimate)
+                sim_sum += movie_similarities[movie_index, int(item)]
+        predictions_matrix[i] = min(user_deviation + movie_deviation + rating_sim / sim_sum, 5.0)
         i += 1
-    #return predictions_matrix
+    # return predictions_matrix
     return [[idx, predictions_matrix[idx-1]] for idx in range(1, len(predictions) + 1)]
 
 
