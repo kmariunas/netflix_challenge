@@ -175,6 +175,16 @@ def movie_rating_deviation_matrix(utility_matrix, mean_rating):
     return deviation_matrix
 
 
+# Returns array of rating deviations for all users. Ignore rating at index 0
+def users_movie_deviation_matrix(utility_matrix, mean_rating):
+    num_users = utility_matrix.shape[1]
+    deviation_matrix = np.empty(num_users)    # array of length = number of users
+    deviation_matrix[0] = 0
+    for index in range(1, num_users):
+        deviation_matrix[index] = user_rating_deviation(utility_matrix, index, mean_rating)
+    return deviation_matrix
+
+
 # Returns baseline estimate of user rating for movie, based on mean rating and biases.
 def calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
     user_deviation = user_rating_deviation(utility_matrix, user_index, mean_rating)
@@ -304,62 +314,74 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
 ##
 #####
 
-# def calculate_gradient(matrix, step_size):
-#     gradient_matrix = np.zeros(matrix.shape)
-#
-#     for row in range(0, len(matrix)):
-#         for value in range(0, len(matrix[row])):
-#             gradient_matrix[row][value] =
+# epoch:    for all ratings Rxi:
+#               for all k (dfactors):
+#                   Q diff =- alpha * qik'
+#                   P diff =- alpha * pxk'
+#               Q += Qdiff
+#               P += Qdiff
+#   pxk' = -2(Rxi - (mean + bx + bi + qi * px)) * qik + 2*l*pxk
+#   qik' = -2(Rxi - (mean + bx + bi + qi * px)) * pxk + 2*l*qik
+#calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
+# Q - users
+# P - movies
+def gradient_descent(utility_matrix, mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.2, l=1, k=100):
+    print("Optimizing")
+    for epoch in range(epochs):
+        print("--epoch", epoch)
+        for count, row in enumerate(ratings):
+            print("--- raing", count)
+            user_index = row[0] - 1
+            movie_index = row[1] - 1
+            rating = row[2]
+            Qdiff = np.zeros(Q.shape)
+            Pdiff = np.zeros(P.shape)
 
+            for i in range(0, k):
+                Qdiff[user_index, i] -= alpha * -2 * P[movie_index, i] * (
+                        rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+                                  + np.dot(Q[user_index], P[movie_index]))) + 2 * l * Q[user_index, i]
+                Pdiff[movie_index, i] -= alpha * -2 * Q[user_index, i] * (
+                        rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+                                  + np.dot(Q[user_index], P[movie_index]))) + 2 * l * P[movie_index, i]
+            Q += Qdiff
+            P += Pdiff
+    print("Finished")
+    return P, Q
 
 def predict_latent_factors(movies, users, ratings, predictions, k=100):
-    # R = Q * P
-    # P and Q are mapped to k - dimensional rows
-    # prediction for user x on movie i Rxi = Qi * PX
-    # have P and Q such that it minimizes:
-    # sum Of All Entrires not missing (rxi - qi * px) ^2
-    # + lambda [sumx(length(px)^2) + sumi(length(qi)^2)]
-    # lambda is a regularization parameter
-    #
-    # gradient descent: initialize P and Q (using SVD, missing ratings are 0)
-    #                   Do gradient descent:
-    #                   P <- P - n * derivative(P)
-    #                   Q <- Q - n * derivative(Q)
-    #                   n - learning rate
-    # derivative(Q) = [derivative(qik)] and
-    # derivative(qik) = sumxi(-2(rxi - qi*px)*pxk) + 2 * lambda * qik
-
-    # movies on colums, users are rows
+    print("Setting up the Utility Matrix")
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
-    utility_matrix = utility_matrix[1:, 1:]
-    print(utility_matrix.shape, " -- Utility matrix")
-    print("CALCULATING SVD")
+    mean_rating = calculate_mean_rating(utility_matrix)
+    user_bias_matrix = users_movie_deviation_matrix(utility_matrix, mean_rating)
+    movie_bias_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
+    matrix = utility_matrix[1:, 1:]
+    print("Finished")
 
-    # might have to give it a transpose of utility
-    U, S, VT = np.linalg.svd(utility_matrix)
-    print(U.shape, ' ', S.shape, ' ', VT.shape, ' -- FINISHED')
+    print("Performing SVD")
+    U, S, V = np.linalg.svd(matrix.T)
+    print(U.shape, " -- U shape | ", S.shape, " -- Sigma shape | ", V.shape, " -- V shape")
 
-    sigma = np.diag(S)
-
-    # might not need to transpose
-    V = VT.T
-
-    print("APPROXIMATING TO P AND Q")
-    Q = V[:, :k]  # users
-    P = sigma * U
-    P = P[:, :k]  # movies
-    print(Q.shape, " - Q shape, ", P.shape, " - P shape")
+    print("Initializing P and Q")
+    Sigma = np.diag(S)
+    Q = U[:, :k]                                  # Users
+    P = np.matmul(Sigma, V)                       # Movies
+    P = P[:k, :].T
+    print(Q.shape, " -- Q shape", P.shape, " -- P shape")
 
     predictions_np = predictions.to_numpy()
     predict = np.empty(len(predictions))
     i = 0
 
-    print(np.sum(P[1914] * Q[1635]))
+    P, Q = gradient_descent(utility_matrix, mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings.to_numpy(), k)
+
+    print("Predicting")
     for row in predictions_np:
-        user_index = row[0]
-        movie_index = row[1]
-        predict[i] = np.sum(P[movie_index - 1] * Q[user_index - 1])
+        user_index = row[0] - 1
+        movie_index = row[1] - 1
+        predict[i] = np.dot(Q[user_index], P[movie_index])
         i += 1
+    print("Finished")
 
     return [[idx, predict[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
@@ -394,9 +416,8 @@ def predict_random(movies, users, ratings, predictions):
 ##
 #####    
 
-## //!!\\ TO CHANGE by your prediction function
-predictions = predict_latent_factors(movies_description, users_description, ratings_description,
-                                     predictions_description)
+# //!!\\ TO CHANGE by your prediction function
+predictions = predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
