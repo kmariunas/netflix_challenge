@@ -325,7 +325,7 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
 #calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
 # Q - users
 # P - movies
-def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.005, l=0.5, k=30):
+def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.005, l=2, k=30):
     print("Optimizing")
     for epoch in range(0, epochs):
         print("--epoch", epoch)
