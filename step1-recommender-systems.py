@@ -325,61 +325,88 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
 #calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
 # Q - users
 # P - movies
-def gradient_descent(utility_matrix, mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.2, l=1, k=100):
+def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.005, l=0.5, k=30):
     print("Optimizing")
-    for epoch in range(epochs):
+    for epoch in range(0, epochs):
         print("--epoch", epoch)
         for count, row in enumerate(ratings):
-            print("--- raing", count)
             user_index = row[0] - 1
             movie_index = row[1] - 1
-            rating = row[2]
-            Qdiff = np.zeros(Q.shape)
-            Pdiff = np.zeros(P.shape)
 
-            for i in range(0, k):
-                Qdiff[user_index, i] -= alpha * -2 * P[movie_index, i] * (
-                        rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
-                                  + np.dot(Q[user_index], P[movie_index]))) + 2 * l * Q[user_index, i]
-                Pdiff[movie_index, i] -= alpha * -2 * Q[user_index, i] * (
-                        rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
-                                  + np.dot(Q[user_index], P[movie_index]))) + 2 * l * P[movie_index, i]
-            Q += Qdiff
-            P += Pdiff
+            #global value - mean rating of all user ratings + user bias rating + movie bias rating
+            global_value = mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+            global_baseline = np.full((1, k), global_value)
+
+            # regularization - 2 * lambda * Pik/Qxk
+            regularization = np.full((1, k), 2 * l)
+            regularizationQ = np.multiply(regularization, Q[user_index])
+            regularizationP = np.multiply(regularization, P[movie_index])
+
+            #prediction - dot product (Q user row, P movie row)
+            rating = np.full((1, k), row[2])
+            prediction = np.full((1, k), np.dot(Q[user_index], P[movie_index]))
+            #prediction + global
+            prediction_global = np.add(global_baseline, prediction)
+            #real rating - (prediction + global)
+            rating_error = np.subtract(rating, prediction_global)
+
+            a = np.multiply(-2, P[movie_index])
+            b = np.multiply(a, rating_error)
+            Qdiff = np.add(b, regularizationQ)
+
+            a = np.multiply(-2, Q[user_index])
+            b = np.multiply(a, rating_error)
+            Pdiff = np.add(b, regularizationP)
+
+            #
+            # for i in range(0, k):
+            #     Qdiff[user_index, i] += -2 * P[movie_index, i] * (
+            #             rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+            #                       + Q[user_index, i] * P[movie_index, i])) + 2 * l * Q[user_index, i]
+            #     Pdiff[movie_index, i] += -2 * Q[user_index, i] * (
+            #             rating - (mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+            #                       + Q[user_index, i] * P[movie_index, i])) + 2 * l * P[movie_index, i]
+            alpha_array = np.full((1, k), alpha)
+            Q[user_index] = np.subtract(Q[user_index], np.multiply(alpha_array, Qdiff))
+            P[movie_index] = np.subtract(P[movie_index], np.multiply(alpha_array, Pdiff))
     print("Finished")
     return P, Q
 
-def predict_latent_factors(movies, users, ratings, predictions, k=100):
+def predict_latent_factors(movies, users, ratings, predictions, k=30):
     print("Setting up the Utility Matrix")
-    utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
+    users = users.to_numpy()
+    movies = movies.to_numpy()
+    ratings = ratings.to_numpy()
+    utility_matrix = create_utility_matrix(users, movies, ratings)
     mean_rating = calculate_mean_rating(utility_matrix)
     user_bias_matrix = users_movie_deviation_matrix(utility_matrix, mean_rating)
     movie_bias_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
     matrix = utility_matrix[1:, 1:]
     print("Finished")
 
-    print("Performing SVD")
-    U, S, V = np.linalg.svd(matrix.T)
-    print(U.shape, " -- U shape | ", S.shape, " -- Sigma shape | ", V.shape, " -- V shape")
-
-    print("Initializing P and Q")
-    Sigma = np.diag(S)
-    Q = U[:, :k]                                  # Users
-    P = np.matmul(Sigma, V)                       # Movies
-    P = P[:k, :].T
-    print(Q.shape, " -- Q shape", P.shape, " -- P shape")
-
+    # print("Performing SVD")
+    # U, S, V = np.linalg.svd(matrix.T)
+    # print(U.shape, " -- U shape | ", S.shape, " -- Sigma shape | ", V.shape, " -- V shape")
+    #
+    # print("Initializing P and Q")
+    # Sigma = np.diag(S)
+    # Q = U[:, :k]                                  # Users
+    # P = np.matmul(Sigma, V)                       # Movies
+    # P = P[:k, :].T
+    # print(Q.shape, " -- Q shape", P.shape, " -- P shape")
+    P = np.full((len(movies), k), 2.5)
+    Q = np.full((len(users), k), 2.5)
     predictions_np = predictions.to_numpy()
     predict = np.empty(len(predictions))
     i = 0
 
-    P, Q = gradient_descent(utility_matrix, mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings.to_numpy(), k)
+    P, Q = gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings)
 
     print("Predicting")
     for row in predictions_np:
         user_index = row[0] - 1
         movie_index = row[1] - 1
-        predict[i] = np.dot(Q[user_index], P[movie_index])
+        predict[i] = np.dot(Q[user_index], P[movie_index]) + mean_rating + movie_bias_matrix[movie_index] + user_bias_matrix[user_index]
         i += 1
     print("Finished")
 
