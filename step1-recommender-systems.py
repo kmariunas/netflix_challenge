@@ -325,7 +325,7 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
 #calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
 # Q - users
 # P - movies
-def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=1, alpha=0.005, l=2, k=30):
+def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=10, alpha=0.005, l=0.05, k=100):
     print("Optimizing")
     for epoch in range(0, epochs):
         print("--epoch", epoch)
@@ -372,7 +372,7 @@ def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, rat
     print("Finished")
     return P, Q
 
-def predict_latent_factors(movies, users, ratings, predictions, k=30):
+def predict_latent_factors(movies, users, ratings, predictions, k=100):
     print("Setting up the Utility Matrix")
     users = users.to_numpy()
     movies = movies.to_numpy()
@@ -394,8 +394,8 @@ def predict_latent_factors(movies, users, ratings, predictions, k=30):
     # P = np.matmul(Sigma, V)                       # Movies
     # P = P[:k, :].T
     # print(Q.shape, " -- Q shape", P.shape, " -- P shape")
-    P = np.full((len(movies), k), 2.5)
-    Q = np.full((len(users), k), 2.5)
+    P = np.full((len(movies), k), 1)
+    Q = np.full((len(users), k), 1)
     predictions_np = predictions.to_numpy()
     predict = np.empty(len(predictions))
     i = 0
