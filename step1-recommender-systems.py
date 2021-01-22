@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
 import os.path
-from random import randint
-import math as math
 # -*- coding: utf-8 -*-
 
 #####
@@ -28,10 +26,6 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
-
-
-def write_matrix_to_file(matrix):
-    np.savetxt(movie_similarities_matrix_file, matrix, delimiter=';')
 
 
 # Returns utility matrix with users.size columns and movies.size rows.
