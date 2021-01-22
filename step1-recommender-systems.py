@@ -2,11 +2,13 @@ import numpy as np
 import pandas as pd
 import os.path
 from random import randint
-
+from sklearn.model_selection import train_test_split
+import math as math
 # -*- coding: utf-8 -*-
 """
 ### NOTES
-
+This file is an example of what your code should look like. It is written in Python 3.6.
+To know more about the expectations, please refer to the guidelines.
 """
 
 #####
@@ -22,6 +24,7 @@ ratings_file = './data/ratings.csv'
 predictions_file = './data/predictions.csv'
 submission_file = './data/submission.csv'
 
+movie_similarities_matrix_file = './data/movie_similarities_matrix.csv'
 
 # Read the data using pandas
 movies_description = pd.read_csv(movies_file, delimiter=';', dtype={'movieID': 'int', 'year': 'int', 'movie': 'str'},
@@ -33,6 +36,9 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
                                   dtype={'userID': 'int', 'movieID': 'int', 'rating': 'int'},
                                   names=['userID', 'movieID', 'rating'])
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
+
+
+movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
 
 
 def write_matrix_to_file(matrix):
@@ -222,6 +228,10 @@ def predict_collaborative_filtering(movies, users, ratings, predictions):
     return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
 
+# TODO: READ ME
+# first uncomment lines 227-229 when running the method. The movies similarities matrix will be written to file.
+# On following runs, comment the lines again and read the matrix from local storage for great SPEED improvement.
+# Combines Global Baseline with Item-Item collaborative Filtering
 def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     utility_matrix = create_utility_matrix(users.to_numpy(), movies.to_numpy(), ratings.to_numpy())
     print("CREATED UTILITY MATRIX")
@@ -229,8 +239,11 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    movie_similarities = movies_similarity_matrix(normalized_matrix)
-    print("CREATED MOVIES SIMILARITIES")
+    # movie_similarities = movies_similarity_matrix(normalized_matrix)
+    # print("CREATED MOVIES SIMILARITIES")
+    # write_matrix_to_file(movie_similarities)
+    movie_similarities = movie_similarities_matrix_description.to_numpy()
+    print("MOVIES SIMILARITIES READ FROM FILE")
     movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
     print("CREATED MOVIES DEVIATION MATRIX")
 
@@ -246,6 +259,7 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
         user_deviation = mean_rating + user_rating_deviation(utility_matrix, user_index, mean_rating)
         movie_deviation = movie_deviation_matrix[row[1]]
         similar_ind = get_n_similar(normalized_matrix, movie_similarities, user_index, movie_index, n)
+        # predictions_matrix[i, 0] = int(i + 1)
 
         rating_sim = 0
         sim_sum = 0
@@ -257,6 +271,7 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
                 sim_sum += movie_similarities[movie_index, int(item)]
         predictions_matrix[i] = min(user_deviation + movie_deviation + rating_sim / sim_sum, 5.0)
         i += 1
+    # return predictions_matrix
     return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
 
@@ -294,25 +309,66 @@ def predict_baseline_estimate(movies, users, ratings, predictions):
     return [[idx, predictions_matrix[idx - 1]] for idx in range(1, len(predictions) + 1)]
 
 
+#####
+##
+## LATENT FACTORS
+##
+#####
+
+# epoch:    for all ratings Rxi:
+#               for all k (dfactors):
+#                   Q diff =- alpha * qik'
+#                   P diff =- alpha * pxk'
+#               Q += Qdiff
+#               P += Qdiff
+#   pxk' = -2(Rxi - (mean + bx + bi + qi * px)) * qik + 2*l*pxk
+#   qik' = -2(Rxi - (mean + bx + bi + qi * px)) * pxk + 2*l*qik
+#calculate_global_baseline(utility_matrix, user_index, movie_bias, mean_rating):
+# Q - users
+# P - movies
+
+# Optimization
+def RMSE(y_test, x_test, P, Q, mean_rating, user_bias_matrix, movie_bias_matrix):
+    squared_error_sum = 0
+    for user, movie, rating in np.c_[x_test, y_test]:
+        predicted_rating = mean_rating + user_bias_matrix[user] + movie_bias_matrix[movie] + np.dot(P[movie - 1], Q[user - 1])
+        squared_error_sum += (rating - predicted_rating) ** 2
+
+    rmse = math.sqrt(squared_error_sum / len(y_test))
+    # print("-RMSE", rmse)
+    return rmse
+
 def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, epochs=50, alpha=0.005, l=0.1, k=30):
-    print("Gradient Descent")
-    for epoch in range(0, epochs):
-        print("--epoch", epoch)
+    # print("Optimizing")
+    # diff = RMSE(y_test, x_test, P, Q, mean_rating, user_bias_matrix, movie_bias_matrix)
+    # rmse = RMSE(y_test, x_test, P, Q, mean_rating, user_bias_matrix, movie_bias_matrix)
+    epoch = 0
+
+    # while diff > 0.001 or epoch < epochs:
+    while epoch < epochs:
+        print("-epoch", epoch)
         for count, row in enumerate(ratings):
             user_index = row[0] - 1
             movie_index = row[1] - 1
 
-            global_value = mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
-            global_baseline = np.full((1, k), global_value)
+            #global value - mean rating of all user ratings + user bias rating + movie bias rating
+            # global_value = mean_rating + user_bias_matrix[user_index] + movie_bias_matrix[movie_index]
+            # global_baseline = np.full((k, ), global_value)
 
-            regularization = np.full((1, k), 2 * l)
+            # regularization - 2 * lambda * Pik/Qxk
+            regularization = np.full((k, ), 2 * l)
             regularizationQ = np.multiply(regularization, Q[user_index])
             regularizationP = np.multiply(regularization, P[movie_index])
 
-            rating = np.full((1, k), row[2])
-            prediction = np.full((1, k), np.dot(Q[user_index], P[movie_index]))
-            prediction_global = np.add(global_baseline, prediction)
-            rating_error = np.subtract(rating, prediction_global)
+            #prediction - dot product (Q user row, P movie row)
+            rating = np.full((k, ), row[2])
+            prediction = np.full((k, ), np.dot(Q[user_index], P[movie_index]))
+
+            #prediction + global
+            # prediction_global = np.add(global_baseline, prediction)
+            #real rating - (prediction + global)
+            # rating_error = np.subtract(rating, prediction_global)
+            rating_error = np.subtract(rating, prediction)
 
             a = np.multiply(-2, P[movie_index])
             b = np.multiply(a, rating_error)
@@ -322,18 +378,71 @@ def gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, rat
             b = np.multiply(a, rating_error)
             Pdiff = np.add(b, regularizationP)
 
-            alpha_array = np.full((1, k), alpha)
-            Q[user_index] = np.subtract(Q[user_index], np.multiply(alpha_array, Qdiff))
-            P[movie_index] = np.subtract(P[movie_index], np.multiply(alpha_array, Pdiff))
-    print("Finished")
+            alpha_array = np.full((k, ), alpha)
+            # Q[user_index] = np.substract(Q[user_index], np.multiply(alpha_array, Qdiff))
+            Q[user_index] -= np.multiply(alpha_array, Qdiff)
+            P[movie_index] -= np.multiply(alpha_array, Pdiff)
+
+        epoch += 1
+        #new_rmse = RMSE(y_test, x_test, P, Q, mean_rating, user_bias_matrix, movie_bias_matrix)
+        #diff = rmse - new_rmse
+        #rmse = new_rmse
+
+
+    # print("Finished")
     return P, Q
+
+def grid_search(y_test, x_test, mean_rating, user_bias_matrix, movie_bias_matrix, num_movies, num_users, ratings):
+    l = [0, 0.01, 0.05, 0.2]
+    factors = [30]
+    epochs = [10, 50, 100]
+    alpha = [0.001, 0.003, 0.005, 0.01]
+
+    for a in alpha:
+        for l_value in l:
+            for k_value in factors:
+                for epoch_value in epochs:
+                    P = np.random.default_rng().uniform(-1, 1, (num_movies, k_value))
+                    Q = np.random.default_rng().uniform(-1, 1, (num_users, k_value))
+                    P, Q = gradient_descent(mean_rating, user_bias_matrix, movie_bias_matrix, P, Q, ratings, y_test, x_test, alpha=a, epochs=epoch_value, l=l_value, k=k_value)
+                    rmse = RMSE(y_test, x_test, P, Q, mean_rating, user_bias_matrix, movie_bias_matrix)
+                    print("alpha", a,"k", k_value, "lambda", l_value, "epochs", epoch_value, "RMSE:", rmse)
+
+def latent_factors(movies, users, ratings):
+    print("Setting up the Utility Matrix")
+    users = users.to_numpy()
+    movies = movies.to_numpy()
+    ratings = ratings.to_numpy()
+
+    x = ratings[:, :2]
+    y = ratings[:, 2:]
+    y = y.reshape((len(y),))
+
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2, random_state=420, stratify=y)
+    utility_matrix = create_utility_matrix(users, movies, np.c_[x_train, y_train])
+
+    mean_rating = calculate_mean_rating(utility_matrix)
+    user_bias_matrix = users_movie_deviation_matrix(utility_matrix, mean_rating)
+    movie_bias_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
+    print("Finished")
+    grid_search(y_test, x_test, mean_rating, user_bias_matrix, movie_bias_matrix, len(movies), len(users), ratings)
+
+# latent_factors(movies_description, users_description, ratings_description)
+
 
 def predict_latent_factors(movies, users, ratings, predictions, k=30):
     print("Setting up the Utility Matrix")
     users = users.to_numpy()
     movies = movies.to_numpy()
     ratings = ratings.to_numpy()
+
+    # x = ratings[:, :2]
+    # y = ratings[:, 2:]
+    # y = y.reshape((len(y), ))
+
+    # x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1, random_state=420, stratify=y)
     utility_matrix = create_utility_matrix(users, movies, ratings)
+
     mean_rating = calculate_mean_rating(utility_matrix)
     user_bias_matrix = users_movie_deviation_matrix(utility_matrix, mean_rating)
     movie_bias_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
@@ -350,9 +459,11 @@ def predict_latent_factors(movies, users, ratings, predictions, k=30):
     # P = np.matmul(Sigma, V)                       # Movies
     # P = P[:k, :].T
     # print(Q.shape, " -- Q shape", P.shape, " -- P shape")
-
-    P = np.full((len(movies), k), 2.5)
-    Q = np.full((len(users), k), 2.5)
+    #np.random.rand(3, 2)
+    P = np.random.default_rng().uniform(-1, 1, (len(movies), k))
+    Q = np.random.default_rng().uniform(-1, 1, (len(users), k))
+    #     np.random.rand(len(movies), k)
+    # Q = np.random.rand(len(users), k)
     predictions_np = predictions.to_numpy()
     predict = np.empty(len(predictions))
     i = 0
@@ -363,7 +474,8 @@ def predict_latent_factors(movies, users, ratings, predictions, k=30):
     for row in predictions_np:
         user_index = row[0] - 1
         movie_index = row[1] - 1
-        predict[i] = np.dot(Q[user_index], P[movie_index]) + mean_rating + movie_bias_matrix[movie_index] + user_bias_matrix[user_index]
+        # predict[i] = np.dot(Q[user_index], P[movie_index]) + mean_rating + movie_bias_matrix[movie_index] + user_bias_matrix[user_index]
+        predict[i] = np.dot(Q[user_index], P[movie_index])
         i += 1
     print("Finished")
 
@@ -398,10 +510,15 @@ def predict_random(movies, users, ratings, predictions):
 ##
 ## SAVE RESULTS
 ##
-#####    
+#####
+
+def average_rating(movies, users, ratings, predictions):
+    pred_c_f = predict_collaborative_filtering_V2(movies, users, ratings, predictions)
+    pred_latent_factors = predict_latent_factors(movies, users, ratings, predictions)
+    return [[idx, (pred_c_f[idx - 1][1] + pred_latent_factors[idx-1][1])/2] for idx in range(1, len(predictions) + 1)]
 
 # //!!\\ TO CHANGE by your prediction function
-predictions = predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
+predictions = average_rating(movies_description, users_description, ratings_description, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
