@@ -38,7 +38,7 @@ ratings_description = pd.read_csv(ratings_file, delimiter=';',
 predictions_description = pd.read_csv(predictions_file, delimiter=';', names=['userID', 'movieID'], header=None)
 
 
-# movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
+movie_similarities_matrix_description = pd.read_csv(movie_similarities_matrix_file, delimiter=';', header=None)
 
 
 def write_matrix_to_file(matrix):
@@ -239,9 +239,9 @@ def predict_collaborative_filtering_V2(movies, users, ratings, predictions):
     print("CALCULATED MEAN RATING")
     normalized_matrix = normalize_matrix(utility_matrix)
     print("NORMALIZED MATRIX")
-    movie_similarities = movies_similarity_matrix(normalized_matrix)
+    # movie_similarities = movies_similarity_matrix(normalized_matrix)
     # print("CREATED MOVIES SIMILARITIES")
-    write_matrix_to_file(movie_similarities)
+    # write_matrix_to_file(movie_similarities)
     movie_similarities = movie_similarities_matrix_description.to_numpy()
     print("MOVIES SIMILARITIES READ FROM FILE")
     movie_deviation_matrix = movie_rating_deviation_matrix(utility_matrix, mean_rating)
@@ -510,10 +510,15 @@ def predict_random(movies, users, ratings, predictions):
 ##
 ## SAVE RESULTS
 ##
-#####    
+#####
+
+def average_rating(movies, users, ratings, predictions):
+    pred_c_f = predict_collaborative_filtering_V2(movies, users, ratings, predictions)
+    pred_latent_factors = predict_latent_factors(movies, users, ratings, predictions)
+    return [[idx, (pred_c_f[idx - 1][1] + pred_latent_factors[idx-1][1])/2] for idx in range(1, len(predictions) + 1)]
 
 # //!!\\ TO CHANGE by your prediction function
-predictions = predict_latent_factors(movies_description, users_description, ratings_description, predictions_description)
+predictions = average_rating(movies_description, users_description, ratings_description, predictions_description)
 
 # Save predictions, should be in the form 'list of tuples' or 'list of lists'
 with open(submission_file, 'w') as submission_writer:
